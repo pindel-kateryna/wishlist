@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes"><meta name="theme-color" content="#efcdc8">
+<link rel="manifest" href="/manifest.webmanifest"><link rel="icon" href="/icon.svg">
+<title>Wishlist</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@500;700&family=DM+Sans:wght@400;500&display=swap">
+<style>
+:root{--bg:linear-gradient(180deg,#e6b4ba 0%,#efcdc8 40%,#f6e4d6 100%);--ink:#4a2f2f;--mute:#8a6f68;--glass:rgba(255,250,246,.86);--card:#fffaf6;--pill:rgba(255,255,255,.85);--acc:#b8506d;--dark:#4a2f2f;--dark-ink:#fff;--line:#ecd8cf;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root{--bg:linear-gradient(180deg,#5a3540 0%,#3d2a2f 45%,#2b1f21 100%);--ink:#f8e9e4;--mute:#c1a7a2;--glass:rgba(58,42,45,.9);--card:#3a2a2d;--pill:rgba(255,255,255,.12);--acc:#e79bb0;--dark:#f8e9e4;--dark-ink:#3a1520;--line:#55403f;color-scheme:dark}}
+html{min-height:100%;background:#efcdc8}*{box-sizing:border-box}
+body{margin:0;min-height:100vh;background:var(--bg) fixed;color:var(--ink);font:400 16px/1.4 "DM Sans",system-ui,sans-serif}
+.app{max-width:480px;margin:0 auto;padding:18px 16px 120px}
+button,a{font:inherit;color:inherit;cursor:pointer;text-decoration:none}button{border:0;background:none}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+header{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:18px;min-height:44px}
+h1{font:700 30px "Bricolage Grotesque",sans-serif;margin:0;letter-spacing:-.02em}
+h2{font:700 24px/1.15 "Bricolage Grotesque",sans-serif;margin:0 0 10px}
+.ib{width:42px;height:42px;border-radius:50%;background:var(--pill);display:grid;place-items:center;font-size:20px}
+.mode{background:var(--pill);border-radius:999px;padding:9px 16px;font-size:14px}
+.lcard{display:flex;justify-content:space-between;align-items:center;width:100%;text-align:left;background:var(--glass);border-radius:32px;padding:20px;margin-bottom:14px;box-shadow:0 8px 24px rgba(120,60,70,.12)}
+.pill{display:table;background:var(--card);border-radius:16px;padding:6px 14px;margin-top:6px;font-size:15px;color:var(--mute)}.pill b{color:var(--ink);margin-left:4px}
+.emo{width:96px;height:96px;border-radius:28px;background:var(--pill);display:grid;place-items:center;font-size:54px;flex:none}
+.top{display:flex;gap:14px;align-items:center;margin-bottom:22px}.top .emo{width:84px;height:84px;font-size:46px;background:var(--glass)}.top .pill{background:var(--pill);margin:0 0 8px}
+.panel{background:var(--glass);margin:0 -16px;padding:16px 16px 120px;border-radius:36px 36px 0 0;min-height:60vh}
+.seg{display:grid;grid-template-columns:1fr 1fr;background:var(--pill);border-radius:999px;padding:5px;margin-bottom:16px}
+.seg button{padding:10px;border-radius:999px;font-size:20px}.seg button[aria-selected="true"]{background:var(--card);box-shadow:0 2px 8px rgba(120,60,70,.12)}
+.cols{columns:2;column-gap:12px}
+.card{break-inside:avoid;margin:0 0 12px;display:block;width:100%;text-align:left;background:var(--card);border-radius:22px;overflow:hidden;position:relative}
+.tile{position:relative;overflow:hidden;display:grid;place-items:center;font:700 44px "Bricolage Grotesque",sans-serif;color:#7a4450}
+.tile img{position:absolute;inset:0;width:100%;height:100%;object-fit:contain;background:#fff}
+.shop{position:absolute;top:10px;right:10px;background:#fff;color:#4a2f2f;border-radius:999px;padding:6px 10px;font-size:13px;max-width:70%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cb{padding:10px 12px 12px}.cn{font-weight:500;margin:0 0 2px;line-height:1.25;overflow-wrap:anywhere}.cp{color:var(--mute);font-size:14px}.cnote{color:var(--mute);font-size:13px;margin-top:2px}
+.got .tile{opacity:.5}.rsv{display:inline-block;background:var(--acc);color:var(--dark-ink);border-radius:999px;padding:3px 10px;font-size:12px;margin-bottom:6px}
+.empty{text-align:center;color:var(--mute);padding:36px 16px}
+.fab{position:fixed;right:max(18px,calc(50% - 222px));bottom:calc(22px + env(safe-area-inset-bottom,0px));width:64px;height:64px;border-radius:50%;background:var(--dark);color:var(--dark-ink);font-size:32px;box-shadow:0 10px 26px rgba(74,47,47,.35)}
+.bg{position:fixed;inset:0;background:rgba(40,20,25,.45);display:none;align-items:flex-end;justify-content:center;z-index:20}.bg.open{display:flex}
+.sheet{background:var(--card);width:100%;max-width:480px;border-radius:32px 32px 0 0;padding:20px 18px calc(22px + env(safe-area-inset-bottom,0px));max-height:94vh;overflow:auto}
+.dtile{width:min(260px,70%);margin:6px auto 18px;border-radius:28px;overflow:hidden}
+.meta{display:flex;justify-content:space-between;color:var(--mute);margin-bottom:8px}.meta b{color:var(--ink);font:700 20px "Bricolage Grotesque",sans-serif}
+.acts{display:flex;gap:10px;margin-top:18px}
+.btn{flex:1;text-align:center;padding:15px 12px;border-radius:999px;background:var(--pill);border:1px solid var(--line);font-weight:500}.btn.dk{background:var(--dark);color:var(--dark-ink);border-color:var(--dark)}
+label{display:block;font-size:14px;color:var(--mute);margin:12px 0 4px}
+input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--pill);border:1px solid var(--line);border-radius:14px;padding:12px}
+.pair{display:flex;gap:8px}.pair input{flex:1}.pair .btn{flex:none}
+.toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--dark);color:var(--dark-ink);padding:10px 16px;border-radius:14px;font-size:14px;max-width:90%;z-index:30;display:none}
+</style></head><body>
+<div class="app" id="root"></div>
+<button class="fab" id="fab" aria-label="Add" hidden>+</button>
+<div class="bg" id="bg"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="toast" id="toast"></div>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>
+// Check that SB_URL matches Project URL in Supabase (Project Settings > API)
+const SB_URL="https://skudwfggpnbjsoymwlmm.supabase.co",SB_KEY="sb_publishable_s7JKIJuHZFrqQC9YDCpytw_8Iqwy_jI";
+const sb=supabase.createClient(SB_URL,SB_KEY),$=id=>document.getElementById(id);
+const slug=new URLSearchParams(location.search).get("l");
+const TOK=(()=>{let t=null;try{t=localStorage.getItem("wl_t")}catch(e){}if(!t){t=crypto.randomUUID();try{localStorage.setItem("wl_t",t)}catch(e){}}return t})();
+let S={user:null,lists:[],items:[],view:null,tab:0,guest:null,err:false,img:""};
+const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const hue=i=>[...i.id].reduce((a,c)=>a+c.charCodeAt(0),0)%60;
+const grad=i=>`background:linear-gradient(135deg,hsl(${340+hue(i)} 70% 88%),hsl(${350+hue(i)} 55% 78%))`;
+const shop=u=>{try{const h=new URL(u).hostname.replace(/^www\./,"").split(".")[0];return h.charAt(0).toUpperCase()+h.slice(1)}catch(e){return ""}};
+function sum(a){let t=0;a.forEach(i=>{const n=parseFloat(String(i.price||"").replace(/[^\d,.]/g,"").replace(",","."));if(!isNaN(n))t+=n});return t.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"}
+function toast(t){const e=$("toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",3500)}
+const tile=(i,h,fs)=>`<div class="tile" style="${grad(i)};height:${h}px;font-size:${fs}px">${esc(i.name.trim().charAt(0).toUpperCase())}${i.image_url?`<img src="${esc(i.image_url)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">`:""}</div>`;
+const card=(i,n)=>`<button class="card${i.fulfilled?" got":""}" data-act="item" data-id="${i.id}">${tile(i,[150,190,130,170][n%4],44)}${shop(i.url)?`<span class="shop">${esc(shop(i.url))} ↗</span>`:""}<div class="cb">${i.reserved&&!i.fulfilled?`<span class="rsv">Reserved${i.reserved_by?" by "+esc(i.reserved_by):""}</span>`:""}<p class="cn">${esc(i.name)}</p><div class="cp">${esc(i.price||"")}</div>${i.note?`<div class="cnote">${esc(i.note)}</div>`:""}</div></button>`;
+const panel=(items,msg)=>{const sh=S.tab?items.filter(i=>i.fulfilled):items.filter(i=>!i.fulfilled);return `<div class="panel"><div class="seg" role="tablist"><button role="tab" aria-selected="${!S.tab}" data-act="tab" data-t="0" aria-label="Wishes">⭐</button><button role="tab" aria-selected="${!!S.tab}" data-act="tab" data-t="1" aria-label="Fulfilled">✅</button></div><div class="cols">${sh.map(card).join("")}</div>${sh.length?"":`<div class="empty">${S.tab?"Nothing fulfilled yet.":msg}</div>`}</div>`};
+const top=(emoji,items)=>{const o=items.filter(i=>!i.fulfilled);return `<div class="top"><div class="emo">${esc(emoji)}</div><div><span class="pill">open wishes <b>${o.length}</b></span><span class="pill">total <b>${sum(o)}</b></span></div></div>`};
+function render(){const r=$("root");$("fab").hidden=true;
+  if(slug){if(S.err||!S.guest){r.innerHTML=`<header><h1>Wishlist</h1></header><div class="empty">This link doesn’t work. Ask for a new one.</div>`;return}
+    r.innerHTML=`<header><h1 style="font-size:24px">${esc(S.guest.name)}</h1></header>`+top(S.guest.emoji,S.guest.items)+panel(S.guest.items,"Nothing here yet.");return}
+  if(!S.user){r.innerHTML=`<header><h1>Wishlists</h1></header><div class="lcard" style="display:block"><h2>Sign in</h2><label for="em">Email</label><input id="em" type="email" autocomplete="username"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"><div class="acts"><button class="btn dk" data-act="login">Sign in</button></div></div>`;return}
+  $("fab").hidden=false;
+  if(!S.view){r.innerHTML=`<header><h1>Wishlists</h1><button class="mode" data-act="out">Sign out</button></header>`+(S.lists.map(l=>{const o=S.items.filter(i=>i.list_id===l.id&&!i.fulfilled);return `<button class="lcard" data-act="open" data-id="${l.id}"><div><h2>${esc(l.name)}</h2><span class="pill">open wishes <b>${o.length}</b></span><span class="pill">total <b>${sum(o)}</b></span></div><div class="emo">${esc(l.emoji)}</div></button>`}).join("")||`<div class="empty">Create your first wishlist with the + button</div>`);return}
+  const l=S.lists.find(x=>x.id===S.view),its=S.items.filter(i=>i.list_id===S.view);
+  r.innerHTML=`<header><button class="ib" data-act="back" aria-label="Back">‹</button><h1 style="font-size:24px">${esc(l.name)}</h1><button class="ib" data-act="share" aria-label="Share">↑</button></header>`+top(l.emoji,its)+panel(its,"It’s empty here. Press + to add a product.")}
+function sheet(h){$("sheet").innerHTML=h;$("bg").classList.add("open")}
+function closeSheet(){$("bg").classList.remove("open")}
+function detail(id){const g=!!slug,i=(g?S.guest.items:S.items).find(x=>x.id===id);
+  const acts=g?(i.fulfilled?"":i.mine?`<button class="btn" data-act="unres" data-id="${id}">Cancel reservation</button>`:i.reserved?"":`<button class="btn" data-act="res" data-id="${id}">Reserve</button>`):`<button class="btn" data-act="got" data-id="${id}">${i.fulfilled?"Move back to wishes":"Mark as fulfilled"}</button>`;
+  sheet(`<div class="dtile">${tile(i,230,80)}</div><h2>${esc(i.name)}</h2><div class="meta"><b>${esc(i.price||"—")}</b><span>${esc(shop(i.url))}</span></div>${i.note?`<p class="cnote" style="font-size:15px">${esc(i.note)}</p>`:""}${g&&i.reserved?`<p class="cnote" style="font-size:15px">${i.mine?"You reserved this":"Reserved by "+esc(i.reserved_by)}</p>`:""}
+  <div class="acts">${acts}${i.url?`<a class="btn dk" href="${esc(i.url)}" target="_blank" rel="noopener">↗ Open link</a>`:""}</div>${g?"":`<div class="acts"><button class="btn" data-act="del" data-id="${id}">Delete</button></div>`}`)}
+function addItem(){S.img="";sheet(`<h2>New product</h2><label for="fUrl">Product link</label><div class="pair"><input id="fUrl" type="url" placeholder="https://..."><button class="btn" data-act="fetch" type="button">Fetch</button></div><label for="fName">Name</label><input id="fName"><label for="fPrice">Price</label><input id="fPrice" placeholder="e.g. 24,90 €"><label for="fList">Wishlist</label><select id="fList">${S.lists.map(l=>`<option value="${l.id}"${l.id===S.view?" selected":""}>${esc(l.name)}</option>`).join("")}</select><label for="fNote">Notes (size, color)</label><textarea id="fNote" rows="2"></textarea><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveItem">Save</button></div>`)}
+function addList(){sheet(`<h2>New wishlist</h2><label for="lName">Name</label><input id="lName"><label for="lEmo">Icon</label><select id="lEmo">${["🎀","🎂","🎄","🌸","👗","💄","🏠","✨"].map(e=>`<option>${e}</option>`).join("")}</select><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveList">Create</button></div>`)}
+async function loadOwner(){const [l,i]=await Promise.all([sb.from("lists").select("*").order("created_at"),sb.from("items").select("*").order("created_at",{ascending:false})]);S.lists=l.data||[];S.items=i.data||[];render()}
+async function loadGuest(){const {data,error}=await sb.rpc("get_shared_list",{p_slug:slug,p_token:TOK});S.guest=data;S.err=!!error||!data;render()}
+async function boot(){if(slug)return loadGuest();const {data}=await sb.auth.getSession();S.user=data.session?data.session.user:null;if(S.user)await loadOwner();else render()}
+$("fab").onclick=()=>S.view?addItem():addList();
+$("bg").onclick=e=>{if(e.target===$("bg"))closeSheet()};
+document.addEventListener("keydown",e=>{if(e.key==="Escape")closeSheet()});
+document.addEventListener("click",async e=>{const t=e.target.closest("[data-act]");if(!t)return;const a=t.dataset.act,id=t.dataset.id;
+  try{
+    if(a==="open"){S.view=id;S.tab=0}
+    else if(a==="back"){S.view=null}
+    else if(a==="tab"){S.tab=+t.dataset.t}
+    else if(a==="item"){detail(id);return}
+    else if(a==="close"){closeSheet();return}
+    else if(a==="out"){await sb.auth.signOut();location.reload();return}
+    else if(a==="login"){const {error}=await sb.auth.signInWithPassword({email:$("em").value.trim(),password:$("pw").value});if(error){toast(error.message);return}await boot();return}
+    else if(a==="share"){const l=S.lists.find(x=>x.id===S.view),u=location.origin+"/?l="+l.share_slug;if(navigator.share){try{await navigator.share({title:l.name,url:u})}catch(x){}}else{await navigator.clipboard.writeText(u);toast("Link copied. Send it to your friends")}return}
+    else if(a==="got"){const i=S.items.find(x=>x.id===id);await sb.from("items").update({fulfilled:!i.fulfilled}).eq("id",id);await loadOwner();closeSheet();return}
+    else if(a==="del"){if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Really delete?";return}await sb.from("items").delete().eq("id",id);await loadOwner();closeSheet();return}
+    else if(a==="fetch"){const v=$("fUrl").value.trim();try{new URL(v)}catch(x){toast("Paste the full link starting with https://");return}
+      t.textContent="…";const {data:{session}}=await sb.auth.getSession();
+      try{const r=await fetch("/api/product?url="+encodeURIComponent(v),{headers:{Authorization:"Bearer "+session.access_token}});const j=await r.json();if(!r.ok)throw new Error(j.error);
+        if(j.title&&!$("fName").value)$("fName").value=j.title;if(j.price&&!$("fPrice").value)$("fPrice").value=j.price;S.img=j.image||"";
+        toast(j.image||j.title||j.price?"Details filled in. Check them before saving":"Nothing found, please fill in manually")}catch(x){toast("Couldn’t read this page, please fill in manually")}
+      t.textContent="Fetch";return}
+    else if(a==="saveItem"){const n=$("fName").value.trim();if(!n){toast("Add a product name");return}
+      const {error}=await sb.from("items").insert({list_id:$("fList").value,name:n,price:$("fPrice").value.trim()||null,url:$("fUrl").value.trim()||null,image_url:S.img||null,note:$("fNote").value.trim()||null});
+      if(error){toast(error.message);return}S.view=$("fList").value;S.tab=0;S.img="";await loadOwner();closeSheet();return}
+    else if(a==="saveList"){const n=$("lName").value.trim();if(!n){toast("Add a wishlist name");return}
+      const {error}=await sb.from("lists").insert({name:n,emoji:$("lEmo").value});if(error){toast(error.message);return}await loadOwner();closeSheet();return}
+    else if(a==="res"){let n="";try{n=localStorage.getItem("wl_n")||""}catch(x){}
+      sheet(`<h2>Reserve this gift</h2><p class="cnote" style="font-size:15px">Your name is shown to other friends, but never to the wishlist owner.</p><label for="gn">Your name</label><input id="gn" value="${esc(n)}"><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="doRes" data-id="${id}">Reserve</button></div>`);return}
+    else if(a==="doRes"){const n=$("gn").value.trim();if(!n){toast("Enter your name");return}try{localStorage.setItem("wl_n",n)}catch(x){}
+      const {error}=await sb.rpc("reserve_item",{p_item:id,p_name:n,p_token:TOK});if(error){toast(error.message);return}await loadGuest();closeSheet();toast("Reserved!");return}
+    else if(a==="unres"){await sb.rpc("cancel_reservation",{p_item:id,p_token:TOK});await loadGuest();closeSheet();toast("Reservation cancelled");return}
+    render()}catch(err){toast(err.message||"Something went wrong")}});
+boot();
+</script></body></html>
