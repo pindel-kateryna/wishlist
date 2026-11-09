@@ -49,13 +49,15 @@ input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--
 <button class="fab" id="fab" aria-label="Add" hidden>+</button>
 <div class="bg" id="bg"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
 <div class="toast" id="toast"></div>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.js"></script>
+<script>function showErr(m){var r=document.getElementById("root");if(r)r.innerHTML='<div class="empty">Error: '+String(m).replace(/</g,"&lt;")+'</div>'}window.addEventListener("error",function(e){showErr(e.message)});window.addEventListener("unhandledrejection",function(e){showErr(e.reason&&e.reason.message||e.reason)})</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
 // Check that SB_URL matches Project URL in Supabase (Project Settings > API)
 const SB_URL="https://skudwfggpnbjsoymwlmm.supabase.co",SB_KEY="sb_publishable_s7JKIJuHZFrqQC9YDCpytw_8Iqwy_jI";
 const sb=supabase.createClient(SB_URL,SB_KEY),$=id=>document.getElementById(id);
 const slug=new URLSearchParams(location.search).get("l");
 const TOK=(()=>{let t=null;try{t=localStorage.getItem("wl_t")}catch(e){}if(!t){t=crypto.randomUUID();try{localStorage.setItem("wl_t",t)}catch(e){}}return t})();
+$("root").innerHTML='<div class="empty">Loading…</div>';
 let S={user:null,lists:[],items:[],view:null,tab:0,guest:null,err:false,img:""};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const hue=i=>[...i.id].reduce((a,c)=>a+c.charCodeAt(0),0)%60;
