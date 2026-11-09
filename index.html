@@ -43,12 +43,13 @@ h2{font:700 24px/1.15 "Bricolage Grotesque",sans-serif;margin:0 0 10px}
 label{display:block;font-size:14px;color:var(--mute);margin:12px 0 4px}
 input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--pill);border:1px solid var(--line);border-radius:14px;padding:12px}
 .pair{display:flex;gap:8px}.pair input{flex:1}.pair .btn{flex:none}
+.photo-preview{display:block;width:100%;max-height:220px;object-fit:contain;border-radius:16px;margin-top:10px;background:#fff}.photo-preview[hidden]{display:none}.hint{font-size:13px;color:var(--mute);margin:6px 0}button:disabled{opacity:.55;cursor:wait}
 .toast{position:fixed;left:50%;bottom:100px;transform:translateX(-50%);background:var(--dark);color:var(--dark-ink);padding:10px 16px;border-radius:14px;font-size:14px;max-width:90%;z-index:30;display:none}
 </style></head><body>
 <div class="app" id="root"></div>
 <button class="fab" id="fab" aria-label="Add" hidden>+</button>
 <div class="bg" id="bg"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
-<div class="toast" id="toast"></div>
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
 <script>function showErr(m){var r=document.getElementById("root");if(r)r.innerHTML='<div class="empty">Error: '+String(m).replace(/</g,"&lt;")+'</div>'}window.addEventListener("error",function(e){showErr(e.message)});window.addEventListener("unhandledrejection",function(e){showErr(e.reason&&e.reason.message||e.reason)})</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script>
@@ -58,10 +59,11 @@ const sb=supabase.createClient(SB_URL,SB_KEY),$=id=>document.getElementById(id);
 const slug=new URLSearchParams(location.search).get("l");
 const TOK=(()=>{let t=null;try{t=localStorage.getItem("wl_t")}catch(e){}if(!t){t=crypto.randomUUID();try{localStorage.setItem("wl_t",t)}catch(e){}}return t})();
 $("root").innerHTML='<div class="empty">Loading…</div>';
-let S={user:null,lists:[],items:[],view:null,tab:0,guest:null,err:false,img:""};
+let S={user:null,lists:[],items:[],view:null,tab:0,guest:null,err:false,img:"",edit:null,formVersion:0,photoVersion:0};
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const hue=i=>[...i.id].reduce((a,c)=>a+c.charCodeAt(0),0)%60;
 const grad=i=>`background:linear-gradient(135deg,hsl(${340+hue(i)} 70% 88%),hsl(${350+hue(i)} 55% 78%))`;
+const safeLink=u=>{try{const v=new URL(u);return /^https?:$/.test(v.protocol)&&!v.username&&!v.password?v.href:""}catch{return ""}};
 const shop=u=>{try{const h=new URL(u).hostname.replace(/^www\./,"").split(".")[0];return h.charAt(0).toUpperCase()+h.slice(1)}catch(e){return ""}};
 function sum(a){let t=0;a.forEach(i=>{const n=parseFloat(String(i.price||"").replace(/[^\d,.]/g,"").replace(",","."));if(!isNaN(n))t+=n});return t.toLocaleString("de-DE",{minimumFractionDigits:2,maximumFractionDigits:2})+" €"}
 function toast(t){const e=$("toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",3500)}
@@ -77,15 +79,40 @@ function render(){const r=$("root");$("fab").hidden=true;
   if(!S.view){r.innerHTML=`<header><h1>Wishlists</h1><button class="mode" data-act="out">Sign out</button></header>`+(S.lists.map(l=>{const o=S.items.filter(i=>i.list_id===l.id&&!i.fulfilled);return `<button class="lcard" data-act="open" data-id="${l.id}"><div><h2>${esc(l.name)}</h2><span class="pill">open wishes <b>${o.length}</b></span><span class="pill">total <b>${sum(o)}</b></span></div><div class="emo">${esc(l.emoji)}</div></button>`}).join("")||`<div class="empty">Create your first wishlist with the + button</div>`);return}
   const l=S.lists.find(x=>x.id===S.view),its=S.items.filter(i=>i.list_id===S.view);
   r.innerHTML=`<header><button class="ib" data-act="back" aria-label="Back">‹</button><h1 style="font-size:24px">${esc(l.name)}</h1><button class="ib" data-act="share" aria-label="Share">↑</button></header>`+hdr(l.emoji,its)+panel(its,"It’s empty here. Press + to add a product.")}
-function sheet(h){$("sheet").innerHTML=h;$("bg").classList.add("open")}
-function closeSheet(){$("bg").classList.remove("open")}
+function sheet(h){S.formVersion++;$("sheet").innerHTML=h;$("bg").classList.add("open")}
+function closeSheet(){S.formVersion++;$("bg").classList.remove("open")}
 function detail(id){const g=!!slug,i=(g?S.guest.items:S.items).find(x=>x.id===id);
   const acts=g?(i.fulfilled?"":i.mine?`<button class="btn" data-act="unres" data-id="${id}">Cancel reservation</button>`:i.reserved?"":`<button class="btn" data-act="res" data-id="${id}">Reserve</button>`):`<button class="btn" data-act="got" data-id="${id}">${i.fulfilled?"Move back to wishes":"Mark as fulfilled"}</button>`;
   sheet(`<div class="dtile">${tile(i,230,80)}</div><h2>${esc(i.name)}</h2><div class="meta"><b>${esc(i.price||"—")}</b><span>${esc(shop(i.url))}</span></div>${i.note?`<p class="cnote" style="font-size:15px">${esc(i.note)}</p>`:""}${g&&i.reserved?`<p class="cnote" style="font-size:15px">${i.mine?"You reserved this":"Reserved by "+esc(i.reserved_by)}</p>`:""}
-  <div class="acts">${acts}${i.url?`<a class="btn dk" href="${esc(i.url)}" target="_blank" rel="noopener">↗ Open link</a>`:""}</div>${g?"":`<div class="acts"><button class="btn" data-act="del" data-id="${id}">Delete</button></div>`}`)}
-function addItem(){S.img="";sheet(`<h2>New product</h2><label for="fUrl">Product link</label><div class="pair"><input id="fUrl" type="url" placeholder="https://..."><button class="btn" data-act="fetch" type="button">Fetch</button></div><label for="fName">Name</label><input id="fName"><label for="fPrice">Price</label><input id="fPrice" placeholder="e.g. 24,90 €"><label for="fList">Wishlist</label><select id="fList">${S.lists.map(l=>`<option value="${l.id}"${l.id===S.view?" selected":""}>${esc(l.name)}</option>`).join("")}</select><label for="fNote">Notes (size, color)</label><textarea id="fNote" rows="2"></textarea><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveItem">Save</button></div>`)}
+  <div class="acts">${acts}${safeLink(i.url)?`<a class="btn dk" href="${esc(safeLink(i.url))}" target="_blank" rel="noopener">↗ Open link</a>`:""}</div>${g?"":`<div class="acts"><button class="btn" data-act="edit" data-id="${id}">Edit</button><button class="btn" data-act="del" data-id="${id}">Delete</button></div>`}`)}
+function updatePhoto(){const preview=$("fPreview");if(!preview)return;preview.hidden=!S.img;preview.src=S.img||"";$("removePhoto").hidden=!S.img}
+function addItem(item=null){S.edit=item?.id||null;S.img=item?.image_url||"";S.photoVersion++;
+  sheet(`<h2>${item?"Edit product":"New product"}</h2><label for="fUrl">Product link (optional)</label><div class="pair"><input id="fUrl" type="url" placeholder="https://..." value="${esc(item?.url||"")}"><button class="btn" data-act="fetch" type="button">Fetch</button></div><p class="hint" id="fetchStatus" role="status">Fetch details from the shop or fill them in below.</p><label for="fPhoto">Product photo</label><input id="fPhoto" type="file" accept="image/*"><p class="hint">Choose a photo from your gallery, even without a product link. Up to 20 MB; photos are resized before saving.</p><img id="fPreview" class="photo-preview" alt="Product photo preview" referrerpolicy="no-referrer" onerror="if(this.getAttribute('src'))document.getElementById('fetchStatus').textContent='The photo could not be loaded. Choose a replacement from your gallery.'" hidden><button id="removePhoto" class="btn" data-act="removePhoto" hidden>Remove photo</button><label for="fName">Name</label><input id="fName" value="${esc(item?.name||"")}" maxlength="300"><label for="fPrice">Price</label><input id="fPrice" placeholder="e.g. 24,90 €" value="${esc(item?.price||"")}"><label for="fList">Wishlist</label><select id="fList">${S.lists.map(l=>`<option value="${l.id}"${l.id===(item?.list_id||S.view)?" selected":""}>${esc(l.name)}</option>`).join("")}</select><label for="fNote">Notes (size, color)</label><textarea id="fNote" rows="2">${esc(item?.note||"")}</textarea><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveItem">Save</button></div>`);updatePhoto()}
+async function preparePhoto(file){
+  if(!file.type.startsWith("image/"))throw new Error("Choose an image file");
+  if(file.size>20*1024*1024)throw new Error("Choose a photo smaller than 20 MB");
+  const objectUrl=URL.createObjectURL(file);
+  try{
+    const img=new Image();img.src=objectUrl;
+    try{await img.decode()}catch{throw new Error("This photo format could not be opened. Choose a JPEG, PNG or WebP photo.")}
+    const scale=Math.min(1,1200/Math.max(img.naturalWidth,img.naturalHeight));
+    const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.naturalWidth*scale));canvas.height=Math.max(1,Math.round(img.naturalHeight*scale));
+    const ctx=canvas.getContext("2d");ctx.fillStyle="#fff";ctx.fillRect(0,0,canvas.width,canvas.height);ctx.drawImage(img,0,0,canvas.width,canvas.height);
+    for(const quality of [.82,.65,.45]){const result=canvas.toDataURL("image/jpeg",quality);if(result.length<=350000)return result}
+    throw new Error("This photo is too detailed. Try cropping it or choosing a smaller photo.");
+  }finally{URL.revokeObjectURL(objectUrl)}
+}
+document.addEventListener("change",async e=>{
+  if(e.target.id!=="fPhoto")return;
+  const file=e.target.files?.[0];if(!file)return;
+  const version=S.formVersion,photoVersion=++S.photoVersion;
+  const save=$("sheet").querySelector('[data-act="saveItem"]');save.disabled=true;e.target.disabled=true;
+  try{const photo=await preparePhoto(file);if(version!==S.formVersion||photoVersion!==S.photoVersion)return;S.img=photo;updatePhoto()}
+  catch(error){if(version===S.formVersion)toast(error.message)}
+  finally{if(version===S.formVersion){save.disabled=$("sheet").querySelector('[data-act="fetch"]').disabled;e.target.disabled=false;e.target.value=""}}
+});
 function addList(){sheet(`<h2>New wishlist</h2><label for="lName">Name</label><input id="lName"><label for="lEmo">Icon</label><select id="lEmo">${["🎀","🎂","🎄","🌸","👗","💄","🏠","✨"].map(e=>`<option>${e}</option>`).join("")}</select><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveList">Create</button></div>`)}
-async function loadOwner(){const [l,i]=await Promise.all([sb.from("lists").select("*").order("created_at"),sb.from("items").select("*").order("created_at",{ascending:false})]);S.lists=l.data||[];S.items=i.data||[];render()}
+async function loadOwner(){const [l,i]=await Promise.all([sb.from("lists").select("*").order("created_at"),sb.from("items").select("*").order("created_at",{ascending:false})]);if(l.error||i.error)throw l.error||i.error;S.lists=l.data||[];S.items=i.data||[];render()}
 async function loadGuest(){const {data,error}=await sb.rpc("get_shared_list",{p_slug:slug,p_token:TOK});S.guest=data;S.err=!!error||!data;render()}
 async function boot(){if(slug)return loadGuest();const {data}=await sb.auth.getSession();S.user=data.session?data.session.user:null;if(S.user)await loadOwner();else render()}
 $("fab").onclick=()=>S.view?addItem():addList();
@@ -97,28 +124,48 @@ document.addEventListener("click",async e=>{const t=e.target.closest("[data-act]
     else if(a==="back"){S.view=null}
     else if(a==="tab"){S.tab=+t.dataset.t}
     else if(a==="item"){detail(id);return}
+    else if(a==="edit"){addItem(S.items.find(i=>i.id===id));return}
+    else if(a==="removePhoto"){S.photoVersion++;S.img="";updatePhoto();return}
     else if(a==="close"){closeSheet();return}
     else if(a==="out"){await sb.auth.signOut();location.reload();return}
     else if(a==="login"){const {error}=await sb.auth.signInWithPassword({email:$("em").value.trim(),password:$("pw").value});if(error){toast(error.message);return}await boot();return}
     else if(a==="share"){const l=S.lists.find(x=>x.id===S.view),u=location.origin+"/?l="+l.share_slug;if(navigator.share){try{await navigator.share({title:l.name,url:u})}catch(x){}}else{await navigator.clipboard.writeText(u);toast("Link copied. Send it to your friends")}return}
-    else if(a==="got"){const i=S.items.find(x=>x.id===id);await sb.from("items").update({fulfilled:!i.fulfilled}).eq("id",id);await loadOwner();closeSheet();return}
-    else if(a==="del"){if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Really delete?";return}await sb.from("items").delete().eq("id",id);await loadOwner();closeSheet();return}
-    else if(a==="fetch"){const v=$("fUrl").value.trim();try{new URL(v)}catch(x){toast("Paste the full link starting with https://");return}
-      t.textContent="…";const {data:{session}}=await sb.auth.getSession();
-      try{const r=await fetch("/api/product?url="+encodeURIComponent(v),{headers:{Authorization:"Bearer "+session.access_token}});const j=await r.json();if(!r.ok)throw new Error(j.error);
-        if(j.title&&!$("fName").value)$("fName").value=j.title;if(j.price&&!$("fPrice").value)$("fPrice").value=j.price;S.img=j.image||"";
-        toast(j.image||j.title||j.price?"Details filled in. Check them before saving":"Nothing found, please fill in manually")}catch(x){toast("Couldn’t read this page, please fill in manually")}
-      t.textContent="Fetch";return}
-    else if(a==="saveItem"){const n=$("fName").value.trim();if(!n){toast("Add a product name");return}
-      const {error}=await sb.from("items").insert({list_id:$("fList").value,name:n,price:$("fPrice").value.trim()||null,url:$("fUrl").value.trim()||null,image_url:S.img||null,note:$("fNote").value.trim()||null});
-      if(error){toast(error.message);return}S.view=$("fList").value;S.tab=0;S.img="";await loadOwner();closeSheet();return}
+    else if(a==="got"){const i=S.items.find(x=>x.id===id);const {error}=await sb.from("items").update({fulfilled:!i.fulfilled}).eq("id",id);if(error)throw error;await loadOwner();closeSheet();return}
+    else if(a==="del"){if(!t.dataset.sure){t.dataset.sure=1;t.textContent="Really delete?";return}const {error}=await sb.from("items").delete().eq("id",id);if(error)throw error;await loadOwner();closeSheet();return}
+    else if(a==="fetch"){
+      const v=safeLink($("fUrl").value.trim());if(!v){toast("Paste a full HTTP or HTTPS link");return}
+      const version=S.formVersion,photoVersion=S.photoVersion;
+      const save=$("sheet").querySelector('[data-act="saveItem"]');save.disabled=true;t.disabled=true;t.textContent="…";
+      $("fetchStatus").textContent="Reading product details…";
+      try{
+        const {data:{session},error}=await sb.auth.getSession();if(error||!session)throw new Error("Please sign in again");
+        const r=await fetch("/api/product?url="+encodeURIComponent(v),{headers:{Authorization:"Bearer "+session.access_token},signal:AbortSignal.timeout(15000)});
+        const j=await r.json();if(!r.ok)throw new Error(j.error||"Could not read the shop");
+        if(version!==S.formVersion||safeLink($("fUrl").value.trim())!==v)return;
+        if(j.title&&!$("fName").value)$("fName").value=j.title;if(j.price&&!$("fPrice").value)$("fPrice").value=j.price;
+        if(j.image&&!S.img&&photoVersion===S.photoVersion){S.img=j.image;updatePhoto()}
+        $("fetchStatus").textContent=j.image||j.title||j.price?"Details found. Check them before saving. You can replace the photo below.":"No details found. Add a name, price and photo below.";
+      }catch(error){if(version===S.formVersion)$("fetchStatus").textContent=(error.name==="TimeoutError"?"The shop took too long to respond.":error.message)+" You can add a name, price and gallery photo below."}
+      finally{if(version===S.formVersion){t.textContent="Fetch";t.disabled=false;save.disabled=$("fPhoto").disabled}}
+      return}
+    else if(a==="saveItem"){
+      if(t.disabled)return;
+      const n=$("fName").value.trim();if(!n){toast("Add a product name");return}
+      const rawUrl=$("fUrl").value.trim(),url=rawUrl?safeLink(rawUrl):null;
+      if(rawUrl&&!url){toast("Use a full HTTP or HTTPS product link, or leave it empty");return}
+      const listId=$("fList").value,version=S.formVersion,editId=S.edit;
+      const item={list_id:listId,name:n,price:$("fPrice").value.trim()||null,url,image_url:S.img||null,note:$("fNote").value.trim()||null};
+      t.disabled=true;t.textContent="Saving…";
+      try{const {error}=await (editId?sb.from("items").update(item).eq("id",editId):sb.from("items").insert(item));if(error)throw error;
+        S.view=listId;S.tab=0;await loadOwner();if(version===S.formVersion)closeSheet();toast(editId?"Product updated":"Product saved")}
+      finally{if(version===S.formVersion){t.disabled=false;t.textContent="Save"}}return}
     else if(a==="saveList"){const n=$("lName").value.trim();if(!n){toast("Add a wishlist name");return}
       const {error}=await sb.from("lists").insert({name:n,emoji:$("lEmo").value});if(error){toast(error.message);return}await loadOwner();closeSheet();return}
     else if(a==="res"){let n="";try{n=localStorage.getItem("wl_n")||""}catch(x){}
       sheet(`<h2>Reserve this gift</h2><p class="cnote" style="font-size:15px">Your name is shown to other friends, but never to the wishlist owner.</p><label for="gn">Your name</label><input id="gn" value="${esc(n)}"><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="doRes" data-id="${id}">Reserve</button></div>`);return}
     else if(a==="doRes"){const n=$("gn").value.trim();if(!n){toast("Enter your name");return}try{localStorage.setItem("wl_n",n)}catch(x){}
       const {error}=await sb.rpc("reserve_item",{p_item:id,p_name:n,p_token:TOK});if(error){toast(error.message);return}await loadGuest();closeSheet();toast("Reserved!");return}
-    else if(a==="unres"){await sb.rpc("cancel_reservation",{p_item:id,p_token:TOK});await loadGuest();closeSheet();toast("Reservation cancelled");return}
+    else if(a==="unres"){const {error}=await sb.rpc("cancel_reservation",{p_item:id,p_token:TOK});if(error)throw error;await loadGuest();closeSheet();toast("Reservation cancelled");return}
     render()}catch(err){toast(err.message||"Something went wrong")}});
-boot();
+boot().catch(error=>{showErr("Could not load your wishlist. Please reload to try again.");console.error(error)});
 </script></body></html>
