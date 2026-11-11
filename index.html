@@ -53,6 +53,7 @@ input,select,textarea{width:100%;font:inherit;color:var(--ink);background:var(--
 <script>function showErr(m){var r=document.getElementById("root");if(r)r.innerHTML='<div class="empty">Error: '+String(m).replace(/</g,"&lt;")+'</div>'}window.addEventListener("error",function(e){showErr(e.message)});window.addEventListener("unhandledrejection",function(e){showErr(e.reason&&e.reason.message||e.reason)})</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="/client-utils.js"></script>
+<script src="/reservations.js"></script>
 <script>
 const {extractProductLink,formatPrice,euroAmount}=WishlistUtils;
 // Check that SB_URL matches Project URL in Supabase (Project Settings > API)
@@ -61,7 +62,10 @@ const sb=supabase.createClient(SB_URL,SB_KEY),$=id=>document.getElementById(id);
 const slug=new URLSearchParams(location.search).get("l");
 const TOK=(()=>{let t=null;try{t=localStorage.getItem("wl_t")}catch(e){}if(!t){t=crypto.randomUUID();try{localStorage.setItem("wl_t",t)}catch(e){}}return t})();
 $("root").innerHTML='<div class="empty">Loading…</div>';
-let S={user:null,lists:[],items:[],view:null,tab:0,guest:null,err:false,img:"",edit:null,formVersion:0,photoVersion:0};
+let S={user:null,lists:[],items:[],view:null,tab:0,guest:null,err:false,img:"",edit:null,formVersion:0,photoVersion:0,receipts:{},detailId:null};
+let reservationStorage=null;try{reservationStorage=localStorage}catch{}
+const reservationStore=WishlistReservations.createStore(reservationStorage,location.origin),reservationService=WishlistReservations.createService(sb);
+let incomingReceipt=WishlistReservations.parseReceiptFragment(location.hash);
 const esc=s=>String(s==null?"":s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
 const hue=i=>[...i.id].reduce((a,c)=>a+c.charCodeAt(0),0)%60;
 const grad=i=>`background:linear-gradient(135deg,hsl(${340+hue(i)} 70% 88%),hsl(${350+hue(i)} 55% 78%))`;
@@ -70,23 +74,23 @@ const shop=u=>{try{const h=new URL(u).hostname.replace(/^www\./,"").split(".")[0
 function sum(a){const total=a.reduce((sum,item)=>sum+(euroAmount(item.price)||0),0);return formatPrice(total.toFixed(2))}
 function toast(t){const e=$("toast");e.textContent=t;e.style.display="block";clearTimeout(toast.t);toast.t=setTimeout(()=>e.style.display="none",3500)}
 const tile=(i,h,fs)=>`<div class="tile" style="${grad(i)};${h?`height:${h}px;`:""}font-size:${fs}px">${esc(i.name.trim().charAt(0).toUpperCase())}${i.image_url?`<img src="${esc(i.image_url)}" alt="" referrerpolicy="no-referrer" loading="lazy" onerror="this.remove()">`:""}</div>`;
-const card=i=>`<button class="card${i.fulfilled?" got":""}" data-act="item" data-id="${i.id}">${tile(i,null,44)}${shop(i.url)?`<span class="shop">${esc(shop(i.url))} ↗</span>`:""}<div class="cb">${i.reserved&&!i.fulfilled?`<span class="rsv">Reserved${i.reserved_by?" by "+esc(i.reserved_by):""}</span>`:""}<p class="cn" title="${esc(i.name)}">${esc(i.name)}</p><div class="cp">${esc(formatPrice(i.price))}</div>${i.note?`<div class="cnote">${esc(i.note)}</div>`:""}</div></button>`;
+const card=i=>`<button class="card${i.fulfilled?" got":""}" data-act="item" data-id="${i.id}">${tile(i,null,44)}${shop(i.url)?`<span class="shop">${esc(shop(i.url))} ↗</span>`:""}<div class="cb">${i.reserved&&!i.fulfilled?`<span class="rsv">${i.mine?"Reserved by you":"Reserved"}</span>`:""}<p class="cn" title="${esc(i.name)}">${esc(i.name)}</p><div class="cp">${esc(formatPrice(i.price))}</div>${i.note?`<div class="cnote">${esc(i.note)}</div>`:""}</div></button>`;
 const panel=(items,msg)=>{const sh=S.tab?items.filter(i=>i.fulfilled):items.filter(i=>!i.fulfilled);return `<div class="panel"><div class="seg" role="tablist"><button role="tab" aria-selected="${!S.tab}" data-act="tab" data-t="0" aria-label="Wishes">⭐</button><button role="tab" aria-selected="${!!S.tab}" data-act="tab" data-t="1" aria-label="Fulfilled">✅</button></div><div class="cols">${sh.map(card).join("")}</div>${sh.length?"":`<div class="empty">${S.tab?"Nothing fulfilled yet.":msg}</div>`}</div>`};
 const hdr=(emoji,items)=>{const o=items.filter(i=>!i.fulfilled);return `<div class="top"><div class="emo">${esc(emoji)}</div><div><span class="pill">open wishes <b>${o.length}</b></span><span class="pill">total <b>${sum(o)}</b></span></div></div>`};
 function render(){const r=$("root");$("fab").hidden=true;
   if(slug){if(S.err||!S.guest){r.innerHTML=`<header><h1>Wishlist</h1></header><div class="empty">This link doesn’t work. Ask for a new one.</div>`;return}
-    r.innerHTML=`<header><h1 style="font-size:24px">${esc(S.guest.name)}</h1></header>`+hdr(S.guest.emoji,S.guest.items)+panel(S.guest.items,"Nothing here yet.");return}
+    r.innerHTML=`<header><h1 style="font-size:24px">${esc(S.guest.name)}</h1><button class="mode" data-act="savedReservations">Saved (${reservationStore.list().length})</button></header>`+hdr(S.guest.emoji,S.guest.items)+panel(S.guest.items,"Nothing here yet.");return}
   if(!S.user){r.innerHTML=`<header><h1>Wishlists</h1></header><div class="lcard" style="display:block"><h2>Sign in</h2><label for="em">Email</label><input id="em" type="email" autocomplete="username"><label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password"><div class="acts"><button class="btn dk" data-act="login">Sign in</button></div></div>`;return}
   $("fab").hidden=false;
   if(!S.view){r.innerHTML=`<header><h1>Wishlists</h1><button class="mode" data-act="out">Sign out</button></header>`+(S.lists.map(l=>{const o=S.items.filter(i=>i.list_id===l.id&&!i.fulfilled);return `<button class="lcard" data-act="open" data-id="${l.id}"><div><h2>${esc(l.name)}</h2><span class="pill">open wishes <b>${o.length}</b></span><span class="pill">total <b>${sum(o)}</b></span></div><div class="emo">${esc(l.emoji)}</div></button>`}).join("")||`<div class="empty">Create your first wishlist with the + button</div>`);return}
   const l=S.lists.find(x=>x.id===S.view),its=S.items.filter(i=>i.list_id===S.view);
   r.innerHTML=`<header><button class="ib" data-act="back" aria-label="Back">‹</button><h1 style="font-size:24px">${esc(l.name)}</h1><button class="ib" data-act="share" aria-label="Share">↑</button></header>`+hdr(l.emoji,its)+panel(its,"It’s empty here. Press + to add a product.")}
-function sheet(h){S.formVersion++;$("sheet").innerHTML=h;$("bg").classList.add("open")}
-function closeSheet(){S.formVersion++;$("bg").classList.remove("open")}
+function sheet(h){S.detailId=null;S.formVersion++;$("sheet").innerHTML=h;$("bg").classList.add("open")}
+function closeSheet(){S.detailId=null;S.formVersion++;$("bg").classList.remove("open")}
 function detail(id){const g=!!slug,i=(g?S.guest.items:S.items).find(x=>x.id===id);
-  const acts=g?(i.fulfilled?"":i.mine?`<button class="btn" data-act="unres" data-id="${id}">Cancel reservation</button>`:i.reserved?"":`<button class="btn" data-act="res" data-id="${id}">Reserve</button>`):`<button class="btn" data-act="got" data-id="${id}">${i.fulfilled?"Move back to wishes":"Mark as fulfilled"}</button>`;
-  sheet(`<div class="dtile">${tile(i,230,80)}</div><h2>${esc(i.name)}</h2><div class="meta"><b>${esc(formatPrice(i.price)||"—")}</b><span>${esc(shop(i.url))}</span></div>${i.note?`<p class="cnote" style="font-size:15px">${esc(i.note)}</p>`:""}${g&&i.reserved?`<p class="cnote" style="font-size:15px">${i.mine?"You reserved this":"Reserved by "+esc(i.reserved_by)}</p>`:""}
-  <div class="acts">${acts}${safeLink(i.url)?`<a class="btn dk" href="${esc(safeLink(i.url))}" target="_blank" rel="noopener">↗ Open link</a>`:""}</div>${g?"":`<div class="acts"><button class="btn" data-act="edit" data-id="${id}">Edit</button><button class="btn" data-act="del" data-id="${id}">Delete</button></div>`}`)}
+  const acts=g?(i.fulfilled?"":i.mine?`<button class="btn" data-act="unres" data-id="${id}">Cancel reservation</button><button class="btn" data-act="receipt" data-id="${id}">Save reservation link</button>`:i.reserved?"":`<button class="btn" data-act="res" data-id="${id}">Reserve</button>`):`<button class="btn" data-act="got" data-id="${id}">${i.fulfilled?"Move back to wishes":"Mark as fulfilled"}</button>`;
+  sheet(`<div class="dtile">${tile(i,230,80)}</div><h2>${esc(i.name)}</h2><div class="meta"><b>${esc(formatPrice(i.price)||"—")}</b><span>${esc(shop(i.url))}</span></div>${i.note?`<p class="cnote" style="font-size:15px">${esc(i.note)}</p>`:""}${i.reserved?`<p class="cnote" style="font-size:15px">${g&&i.mine?"You reserved this gift.":"This gift is reserved."}</p>`:""}
+  <div class="acts">${acts}${safeLink(i.url)?`<a class="btn dk" href="${esc(safeLink(i.url))}" target="_blank" rel="noopener">↗ Open link</a>`:""}</div>${g?"":`<div class="acts"><button class="btn" data-act="edit" data-id="${id}">Edit</button><button class="btn" data-act="del" data-id="${id}">Delete</button></div>`}`);S.detailId=id}
 function updatePhoto(){const preview=$("fPreview");if(!preview)return;preview.hidden=!S.img;preview.src=S.img||"";$("removePhoto").hidden=!S.img}
 function addItem(item=null){S.edit=item?.id||null;S.img=item?.image_url||"";S.photoVersion++;
   sheet(`<h2>${item?"Edit product":"New product"}</h2><label for="fUrl">Product link (optional)</label><div class="pair"><input id="fUrl" type="text" inputmode="url" autocomplete="url" placeholder="Paste a link or shared text" value="${esc(item?.url||"")}"><button class="btn" data-act="fetch" type="button">Fetch</button></div><p class="hint" id="fetchStatus" role="status">Paste a link or shared text; the product link is detected automatically.</p><label for="fPhoto">Product photo</label><input id="fPhoto" type="file" accept="image/*"><p class="hint">Choose a photo from your gallery, even without a product link. Up to 20 MB; photos are resized before saving.</p><img id="fPreview" class="photo-preview" alt="Product photo preview" referrerpolicy="no-referrer" onerror="if(this.getAttribute('src'))document.getElementById('fetchStatus').textContent='The photo could not be loaded. Choose a replacement from your gallery.'" hidden><button id="removePhoto" class="btn" data-act="removePhoto" hidden>Remove photo</button><label for="fName">Name</label><textarea id="fName" rows="3" maxlength="1000">${esc(item?.name||"")}</textarea><label for="fPrice">Price</label><input id="fPrice" placeholder="e.g. 24,90 €" value="${esc(formatPrice(item?.price))}"><label for="fList">Wishlist</label><select id="fList">${S.lists.map(l=>`<option value="${l.id}"${l.id===(item?.list_id||S.view)?" selected":""}>${esc(l.name)}</option>`).join("")}</select><label for="fNote">Notes (size, color)</label><textarea id="fNote" rows="2">${esc(item?.note||"")}</textarea><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveItem">Save</button></div>`);updatePhoto()}
@@ -125,7 +129,43 @@ document.addEventListener("change",async e=>{
 });
 function addList(){sheet(`<h2>New wishlist</h2><label for="lName">Name</label><input id="lName"><label for="lEmo">Icon</label><select id="lEmo">${["🎀","🎂","🎄","🌸","👗","💄","🏠","✨"].map(e=>`<option>${e}</option>`).join("")}</select><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="saveList">Create</button></div>`)}
 async function loadOwner(){const [l,i]=await Promise.all([sb.from("lists").select("*").order("created_at"),sb.from("items").select("*").order("created_at",{ascending:false})]);if(l.error||i.error)throw l.error||i.error;S.lists=l.data||[];S.items=i.data||[];render()}
-async function loadGuest(){const {data,error}=await sb.rpc("get_shared_list",{p_slug:slug,p_token:TOK});S.guest=data;S.err=!!error||!data;render()}
+let guestLoadQueue=Promise.resolve();
+function loadGuest(){const next=guestLoadQueue.catch(()=>{}).then(loadGuestNow);guestLoadQueue=next;return next}
+async function loadGuestNow(){
+  const {data,error}=await sb.rpc("get_shared_list",{p_slug:slug,p_token:TOK});
+  if(error)throw error;
+  if(!data){S.guest=null;S.err=true;render();throw new Error("This wishlist link no longer works")}
+  S.guest=data;S.err=false;S.receipts={};
+  const saved=reservationStore.list(slug),keys=new Map(saved.map(r=>[r.item_id,r.receipt_key]));
+  if(incomingReceipt)keys.set(incomingReceipt.itemId,incomingReceipt.key);
+  const candidates=data.items.filter(i=>i.mine||keys.has(i.id));
+  await Promise.all(candidates.map(async item=>{
+    if(!item.reserved){reservationStore.remove(item.id);return}
+    const result=await sb.rpc("get_reservation_receipt",{p_item:item.id,p_token:TOK,p_key:keys.get(item.id)||null});
+    if(result.error){
+      if(item.mine)reservationStore.save({item_id:item.id,share_slug:slug,name:item.name,price:item.price,list_name:data.name});
+      return;
+    }
+    const receipt=result.data;
+    if(receipt&&receipt.share_slug===slug){S.receipts[item.id]=receipt;item.mine=true;reservationStore.save(receipt)}
+    else reservationStore.remove(item.id);
+  }));
+  for(const entry of saved)if(!data.items.some(i=>i.id===entry.item_id))reservationStore.remove(entry.item_id);
+  render();return data;
+}
+function showReservationReceipt(id){
+  const item=S.guest?.items.find(i=>i.id===id);
+  if(!item?.mine||!item.reserved){toast("This reservation is no longer active");return}
+  const receipt=S.receipts[id]||{item_id:id,share_slug:slug,name:item.name,price:item.price,list_name:S.guest.name};
+  const saved=reservationStore.save(receipt),privateLink=!!receipt.receipt_key;
+  const email="mailto:?subject="+encodeURIComponent("Reserved gift: "+item.name)+"&body="+encodeURIComponent(item.name+"\n"+saved.link);
+  sheet(`<h2>Reserved for you</h2><p>${esc(item.name)}</p><p class="hint">The owner sees that this gift is reserved, without your name.</p><p class="hint">${saved.persisted?"Saved in this browser. Find it again under Saved.":"This browser cannot store the reservation. Copy the private link to keep it."}</p><label for="reservationLink">${privateLink?"Your private reservation link":"Return to this wishlist"}</label><textarea id="reservationLink" rows="3" readonly>${esc(saved.link)}</textarea><p class="hint">${privateLink?"Keep this link for yourself. It lets you view or cancel this reservation on another device.":"A private recovery link is unavailable right now. This return link works with your reservation in this browser."}</p><div class="acts"><button class="btn dk" data-act="copyReservation">Copy link</button>${privateLink?`<a class="btn" href="${esc(email)}">Email draft</a>`:""}</div>${privateLink?'<p class="hint">Email draft opens your mail app. Choose the recipient and send it yourself.</p>':""}<div class="acts"><button class="btn" data-act="close">Done</button></div>`);
+}
+function showSavedReservations(){
+  const saved=reservationStore.list();
+  sheet(`<h2>Saved reservations</h2><p class="hint">Saved on this browser. Keep a private link to open a gift on another device.</p>${saved.length?saved.map(r=>`<a class="lcard" style="display:block;border-radius:18px" href="${esc(r.link)}" data-act="openSaved" data-id="${r.item_id}"><strong>${esc(r.name)}</strong><div class="cnote">${esc(r.list_name)} · ${esc(formatPrice(r.price))}</div><span class="cnote">Open reservation →</span></a>`).join(""):'<p class="empty">No saved reservations yet.</p>'}<div class="acts"><button class="btn" data-act="close">Close</button></div>`);
+}
+
 async function boot(){if(slug)return loadGuest();const {data}=await sb.auth.getSession();S.user=data.session?data.session.user:null;if(S.user)await loadOwner();else render()}
 $("fab").onclick=()=>S.view?addItem():addList();
 $("bg").onclick=e=>{if(e.target===$("bg"))closeSheet()};
@@ -174,11 +214,35 @@ document.addEventListener("click",async e=>{const t=e.target.closest("[data-act]
       finally{if(version===S.formVersion){t.disabled=false;t.textContent="Save"}}return}
     else if(a==="saveList"){const n=$("lName").value.trim();if(!n){toast("Add a wishlist name");return}
       const {error}=await sb.from("lists").insert({name:n,emoji:$("lEmo").value});if(error){toast(error.message);return}await loadOwner();closeSheet();return}
-    else if(a==="res"){let n="";try{n=localStorage.getItem("wl_n")||""}catch(x){}
-      sheet(`<h2>Reserve this gift</h2><p class="cnote" style="font-size:15px">Your name is shown to other friends, but never to the wishlist owner.</p><label for="gn">Your name</label><input id="gn" value="${esc(n)}"><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="doRes" data-id="${id}">Reserve</button></div>`);return}
-    else if(a==="doRes"){const n=$("gn").value.trim();if(!n){toast("Enter your name");return}try{localStorage.setItem("wl_n",n)}catch(x){}
-      const {error}=await sb.rpc("reserve_item",{p_item:id,p_name:n,p_token:TOK});if(error){toast(error.message);return}await loadGuest();closeSheet();toast("Reserved!");return}
-    else if(a==="unres"){const {error}=await sb.rpc("cancel_reservation",{p_item:id,p_token:TOK});if(error)throw error;await loadGuest();closeSheet();toast("Reservation cancelled");return}
+    else if(a==="savedReservations"){showSavedReservations();return}
+    else if(a==="openSaved"){e.preventDefault();const saved=reservationStore.list().find(r=>r.item_id===id);if(!saved)return;if(saved.share_slug===slug){await loadGuest();detail(id)}else location.assign(saved.link);return}
+    else if(a==="receipt"){showReservationReceipt(id);return}
+    else if(a==="copyReservation"){try{await navigator.clipboard.writeText($("reservationLink").value);toast("Reservation link copied")}catch{toast("Select the link above and copy it manually")}return}
+    else if(a==="res"){
+      const item=S.guest?.items.find(i=>i.id===id);if(!item||item.fulfilled||item.reserved){toast("This gift is no longer available");return}
+      sheet(`<h2>Reserve this gift</h2><p>${esc(item.name)}</p><p class="hint">The owner will see Reserved, without your name. Your reservation will be saved in this browser, with a private link to keep.</p><div class="acts"><button class="btn" data-act="close">Cancel</button><button class="btn dk" data-act="doRes" data-id="${id}">Reserve</button></div>`);return}
+    else if(a==="doRes"){
+      if(t.disabled)return;const version=S.formVersion;t.disabled=true;t.textContent="Reserving…";
+      try{await reservationService.reserve(id,TOK,loadGuest);if(version===S.formVersion)showReservationReceipt(id);else toast("Reservation saved. Find it under Saved.")}
+      catch(error){try{await loadGuest()}catch{}throw error}
+      finally{t.disabled=false;t.textContent="Reserve"}return}
+    else if(a==="unres"){
+      if(t.disabled)return;t.disabled=true;
+      try{await reservationService.cancel(id,TOK,S.receipts[id]?.receipt_key,loadGuest);reservationStore.remove(id);closeSheet();render();toast("Reservation cancelled")}
+      finally{t.disabled=false}return}
+
     render()}catch(err){toast(err.message||"Something went wrong")}});
-boot().catch(error=>{showErr("Could not load your wishlist. Please reload to try again.");console.error(error)});
+let refreshingReservations=false;
+async function refreshReservations(){
+  if(document.hidden||refreshingReservations)return;refreshingReservations=true;
+  try{
+    if(slug&&S.guest){const detailId=S.detailId;await loadGuest();if(detailId&&$("bg").classList.contains("open"))detail(detailId)}
+    else if(S.user){const {data,error}=await sb.from("items").select("id,reserved");if(error)throw error;const statuses=new Map(data.map(i=>[i.id,i.reserved]));let changed=false;for(const item of S.items){if(statuses.has(item.id)&&item.reserved!==statuses.get(item.id)){item.reserved=statuses.get(item.id);changed=true}}if(changed){const detailId=S.detailId;render();if(detailId&&$("bg").classList.contains("open"))detail(detailId)}}
+  }catch{/* Retain the current list during a temporary connection failure. */}finally{refreshingReservations=false}
+}
+window.addEventListener("hashchange",async()=>{if(!slug)return;incomingReceipt=WishlistReservations.parseReceiptFragment(location.hash);try{await loadGuest();const params=new URLSearchParams(location.hash.slice(1)),id=incomingReceipt?.itemId||params.get("item");if(id&&S.guest?.items.some(i=>i.id===id))detail(id)}catch(error){toast(error.message)}});
+window.addEventListener("focus",refreshReservations);
+document.addEventListener("visibilitychange",refreshReservations);
+setInterval(refreshReservations,30000);
+boot().then(()=>{if(slug){const params=new URLSearchParams(location.hash.slice(1));const id=incomingReceipt?.itemId||params.get("item");if(id&&S.guest?.items.some(i=>i.id===id))detail(id)}}).catch(error=>{showErr("Could not load your wishlist. Please reload to try again.");console.error(error)});
 </script></body></html>

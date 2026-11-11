@@ -1,0 +1,65 @@
+// Run with PGLITE_MODULE_PATH=/path/to/node_modules/@electric-sql/pglite node tests/reservations-db.cjs
+const assert=require('node:assert/strict');
+const fs=require('node:fs');
+const path=require('node:path');
+const {PGlite}=require(process.env.PGLITE_MODULE_PATH||'@electric-sql/pglite');
+(async()=>{
+const db=new PGlite();let checks=0;
+const owner='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+const list='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+const item='cccccccc-cccc-4ccc-8ccc-cccccccccccc';
+const token='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+const other='eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee';
+await db.exec(`
+create role anon;create role authenticated;create schema auth;
+create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
+grant usage on schema public, auth to anon,authenticated;
+create table public.lists(id uuid primary key default gen_random_uuid(), owner_id uuid not null default auth.uid(), name text not null, emoji text default 'x',share_slug text unique not null,created_at timestamptz default now());
+create table public.items(id uuid primary key default gen_random_uuid(),owner_id uuid not null default auth.uid(),list_id uuid not null references public.lists(id) on delete cascade,name text not null,price text,url text,image_url text,note text,fulfilled boolean not null default false,created_at timestamptz default now());
+create table public.reservations(item_id uuid primary key references public.items(id) on delete cascade,guest_name text not null,guest_token uuid not null,created_at timestamptz default now());
+alter table public.lists enable row level security;alter table public.items enable row level security;alter table public.reservations enable row level security;
+grant select,insert,update,delete on public.lists,public.items,public.reservations to anon,authenticated;
+create policy "owner manages lists" on public.lists for all to authenticated using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+create policy "owner manages items" on public.items for all to authenticated using(owner_id=auth.uid()) with check(owner_id=auth.uid());
+insert into public.lists(id,owner_id,name,share_slug) values('${list}','${owner}','Local test','test-list');
+insert into public.items(id,owner_id,list_id,name,price) values('${item}','${owner}','${list}','Gift','10 €');
+insert into public.reservations(item_id,guest_name,guest_token) values('${item}','Private Test Name','${token}');
+`);
+await db.exec(fs.readFileSync(path.join(__dirname,'../supabase/migrations/202611110001_reservation_status_and_receipts.sql'),'utf8'));
+async function q(sql,params=[]){return(await db.query(sql,params)).rows}
+function check(condition){assert.ok(condition);checks++}
+check((await q('select reserved from public.items where id=$1',[item]))[0].reserved===true);
+check((await q('select count(*)::int as count from public.reservations'))[0].count===1);
+let guest=(await q('select public.get_shared_list($1,$2) as data',['test-list',token]))[0].data;
+check(guest.items[0].mine===true&&guest.items[0].reserved===true);
+check(guest.items[0].reserved_by===null&&!JSON.stringify(guest).includes('Private Test Name'));
+await db.exec(`select set_config('request.jwt.claim.sub','${owner}',false);set role authenticated;`);
+check((await q('select reserved from public.items where id=$1',[item]))[0].reserved===true);
+check((await q('select * from public.reservations')).length===0);
+let ownerShared=(await q('select public.get_shared_list($1,$2) as data',['test-list',other]))[0].data;
+check(ownerShared.items[0].reserved===true&&ownerShared.items[0].mine===false);
+check((await q('select public.get_reservation_receipt($1,$2,null) as receipt',[item,other]))[0].receipt===null);
+await db.exec(`update public.items set reserved=false where id='${item}';`);
+check((await q('select reserved from public.items where id=$1',[item]))[0].reserved===true);
+await db.exec("reset role;select set_config('request.jwt.claim.sub','',false);set role anon;");
+check((await q('select * from public.items')).length===0);
+await db.query('select public.reserve_item($1,$2,$3)',[item,'Ignored duplicate',token]);
+await assert.rejects(db.query('select public.reserve_item($1,$2,$3)',[item,'Other guest',other]),/Already reserved/);checks++;
+const receipt=(await q('select public.get_reservation_receipt($1,$2,null) as receipt',[item,token]))[0].receipt;
+check(receipt.item_id===item&&receipt.receipt_key&&receipt.share_slug==='test-list');
+check(!Object.hasOwn(receipt,'guest_token')&&!Object.hasOwn(receipt,'guest_name'));
+check((await q('select public.get_reservation_receipt($1,null,$2) as receipt',[item,receipt.receipt_key]))[0].receipt.item_id===item);
+await assert.rejects(db.query('select public.cancel_reservation($1,$2)',[item,other]),/another guest/);checks++;
+await assert.rejects(db.query('select public.cancel_reservation_receipt($1,$2)',[item,other]),/Invalid reservation/);checks++;
+await db.query('select public.cancel_reservation_receipt($1,$2)',[item,receipt.receipt_key]);
+check((await q('select public.get_shared_list($1,$2) as data',['test-list',token]))[0].data.items[0].reserved===false);
+check((await q('select public.get_reservation_receipt($1,$2,null) as receipt',[item,token]))[0].receipt===null);
+await db.query('select public.reserve_item($1,$2,$3)',[item,'',other]);
+check((await q('select public.get_shared_list($1,$2) as data',['test-list',other]))[0].data.items[0].mine===true);
+await assert.rejects(db.query('select public.reserve_item($1,$2,null)',[item,'Guest']),/token is required/);checks++;
+await db.exec(`reset role;update public.items set fulfilled=true where id='${item}';set role anon;`);
+await assert.rejects(db.query('select public.reserve_item($1,$2,$3)',[item,'Guest',other]),/not available/);checks++;
+await db.exec(`reset role;delete from public.items where id='${item}';`);
+check((await q('select count(*)::int as count from public.reservations'))[0].count===0);
+await db.close();console.log(`Local PostgreSQL reservation checks passed: ${checks}`);
+})().catch(error=>{console.error(error);process.exitCode=1});
